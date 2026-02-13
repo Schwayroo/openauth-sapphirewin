@@ -8,6 +8,8 @@ declare namespace Cloudflare {
 	interface Env {
 		AUTH_STORAGE: KVNamespace;
 		AUTH_DB: D1Database;
+		RESEND_API_KEY: string;
+		RESEND_FROM: string;
 	}
 }
 interface Env extends Cloudflare.Env {}

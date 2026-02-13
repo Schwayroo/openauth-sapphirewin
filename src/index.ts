@@ -331,10 +331,37 @@ export default {
 				password: PasswordProvider(
 					PasswordUI({
 						sendCode: async (email, code) => {
-							console.log(`Sending code ${code} to ${email}`);
+							const res = await fetch("https://api.resend.com/emails", {
+								method: "POST",
+								headers: {
+									"Authorization": `Bearer ${env.RESEND_API_KEY}`,
+									"Content-Type": "application/json",
+								},
+								body: JSON.stringify({
+									from: env.RESEND_FROM,
+									to: [email],
+									subject: `Your SapphireAuth verification code: ${code}`,
+									html: `
+										<div style="font-family: 'Inter', system-ui, sans-serif; max-width: 480px; margin: 0 auto; padding: 2rem; background: #0F0F13; color: #E4E4ED; border-radius: 1rem;">
+											<h2 style="color: #6C63FF; margin-bottom: 0.5rem;">SapphireAuth</h2>
+											<p style="color: #7A7A92; margin-bottom: 1.5rem;">Here's your verification code:</p>
+											<div style="background: #1A1A24; border: 1px solid #2A2A3C; border-radius: 0.75rem; padding: 1.25rem; text-align: center; margin-bottom: 1.5rem;">
+												<span style="font-size: 2rem; font-weight: 700; letter-spacing: 0.3em; color: #E4E4ED;">${code}</span>
+											</div>
+											<p style="color: #5A5A72; font-size: 0.85rem;">This code expires in 24 hours. If you didn't request this, you can ignore this email.</p>
+										</div>
+									`,
+								}),
+							});
+							if (!res.ok) {
+								const err = await res.text();
+								console.error(`Resend error: ${err}`);
+								throw new Error(`Failed to send verification email`);
+							}
+							console.log(`Verification code sent to ${email}`);
 						},
 						copy: {
-							input_code: "Code (check Worker logs)",
+							input_code: "Enter the code sent to your email",
 							register_title: "Create your account",
 							register_description: "Sign up with your email",
 							login_title: "Welcome back",
