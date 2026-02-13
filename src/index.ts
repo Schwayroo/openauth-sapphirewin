@@ -33,8 +33,9 @@ import {
 import { forumDetailPage, forumListPage, forumNewPage } from "./pages/forum";
 import { adminUsersPage } from "./pages/admin";
 
-import { makeSessionCookie, getSessionFromRequest } from "./session";
+import { makeSessionCookie, getSessionFromRequest, clearSessionCookie } from "./session";
 import { redirectToLogin, refreshSessionFromDb, requireRole } from "./authz";
+import { canonicalize, getCanonicalHost } from "./canonical";
 
 const subjects = createSubjects({
 	user: object({
@@ -64,6 +65,8 @@ function splitImageUrls(images: string): string[] {
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext) {
 		const url = new URL(request.url);
+		const canon = canonicalize(url, env);
+		if (canon) return canon;
 
 		if (url.pathname === "/") return Response.redirect(url.origin + "/dashboard", 302);
 
@@ -114,11 +117,12 @@ export default {
 
 		// Logout
 		if (url.pathname === "/logout") {
+			const domain = getCanonicalHost(env) ?? undefined;
 			return new Response(null, {
 				status: 302,
 				headers: {
 					Location: url.origin + "/",
-					"Set-Cookie": "sapphire_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
+					"Set-Cookie": clearSessionCookie({ domain }),
 				},
 			});
 		}
@@ -362,6 +366,7 @@ export default {
 						username: user?.username ?? null,
 					},
 					COOKIE_SECRET,
+					{ domain: getCanonicalHost(env) ?? undefined },
 				);
 
 				return new Response(null, {

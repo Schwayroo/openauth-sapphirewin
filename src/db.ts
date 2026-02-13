@@ -3,6 +3,7 @@ export type Env = {
 	AUTH_STORAGE: KVNamespace;
 	RESEND_API_KEY: string;
 	RESEND_FROM: string;
+	CANONICAL_HOST?: string;
 };
 
 export async function getUserById(env: Env, id: string) {

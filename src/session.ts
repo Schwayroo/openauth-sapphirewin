@@ -44,11 +44,26 @@ export async function getSessionFromRequest(request: Request, cookieSecret: stri
 	if (!sessionCookie) return null;
 	const data = await verify(decodeURIComponent(sessionCookie), cookieSecret);
 	if (!data) return null;
-	return JSON.parse(data) as Session;
+	try {
+		return JSON.parse(data) as Session;
+	} catch {
+		return null;
+	}
 }
 
-export async function makeSessionCookie(session: Session, cookieSecret: string): Promise<string> {
+export async function makeSessionCookie(
+	session: Session,
+	cookieSecret: string,
+	opts?: { domain?: string; maxAgeSeconds?: number },
+): Promise<string> {
 	const sessionData = JSON.stringify(session);
 	const signed = await sign(sessionData, cookieSecret);
-	return `sapphire_session=${encodeURIComponent(signed)}; Path=/; Max-Age=86400; HttpOnly; Secure; SameSite=Lax`;
+	const maxAge = opts?.maxAgeSeconds ?? 86400;
+	const domain = opts?.domain ? `; Domain=${opts.domain}` : "";
+	return `sapphire_session=${encodeURIComponent(signed)}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax${domain}`;
+}
+
+export function clearSessionCookie(opts?: { domain?: string }) {
+	const domain = opts?.domain ? `; Domain=${opts.domain}` : "";
+	return `sapphire_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax${domain}`;
 }
