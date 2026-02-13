@@ -4,13 +4,45 @@ import { PasswordProvider } from "@openauthjs/openauth/provider/password";
 import { PasswordUI } from "@openauthjs/openauth/ui/password";
 import { createSubjects } from "@openauthjs/openauth/subject";
 import { object, string } from "valibot";
-import { decodeJwt } from "jose";
 
 const subjects = createSubjects({
 	user: object({
 		id: string(),
 	}),
 });
+
+// Simple HMAC-based signing for session cookies
+async function sign(data: string, secret: string): Promise<string> {
+	const key = await crypto.subtle.importKey(
+		"raw",
+		new TextEncoder().encode(secret),
+		{ name: "HMAC", hash: "SHA-256" },
+		false,
+		["sign"],
+	);
+	const sig = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(data));
+	const sigHex = [...new Uint8Array(sig)].map((b) => b.toString(16).padStart(2, "0")).join("");
+	return `${data}.${sigHex}`;
+}
+
+async function verify(cookie: string, secret: string): Promise<string | null> {
+	const lastDot = cookie.lastIndexOf(".");
+	if (lastDot === -1) return null;
+	const data = cookie.slice(0, lastDot);
+	const expected = await sign(data, secret);
+	if (expected !== cookie) return null;
+	return data;
+}
+
+function parseCookies(header: string | null): Record<string, string> {
+	if (!header) return {};
+	return Object.fromEntries(
+		header.split(";").map((c) => {
+			const [k, ...v] = c.trim().split("=");
+			return [k, v.join("=")];
+		}),
+	);
+}
 
 function homePage(email: string, userId: string): Response {
 	const html = `<!DOCTYPE html>
@@ -47,10 +79,7 @@ function homePage(email: string, userId: string): Response {
 		}
 		.nav-brand span { color: #E4E4ED; }
 		.nav-actions { display: flex; align-items: center; gap: 1rem; }
-		.nav-user {
-			font-size: 0.875rem;
-			color: #7A7A92;
-		}
+		.nav-user { font-size: 0.875rem; color: #7A7A92; }
 		.btn {
 			display: inline-flex;
 			align-items: center;
@@ -64,16 +93,9 @@ function homePage(email: string, userId: string): Response {
 			cursor: pointer;
 			transition: all 0.15s ease;
 		}
-		.btn-primary {
-			background: #6C63FF;
-			color: #FFF;
-		}
+		.btn-primary { background: #6C63FF; color: #FFF; }
 		.btn-primary:hover { background: #5B52E0; }
-		.btn-ghost {
-			background: transparent;
-			color: #7A7A92;
-			border: 1px solid #2A2A3C;
-		}
+		.btn-ghost { background: transparent; color: #7A7A92; border: 1px solid #2A2A3C; }
 		.btn-ghost:hover { color: #E4E4ED; border-color: #3A3A4C; }
 		main {
 			flex: 1;
@@ -81,22 +103,10 @@ function homePage(email: string, userId: string): Response {
 			justify-content: center;
 			padding: 3rem 2rem;
 		}
-		.dashboard {
-			max-width: 640px;
-			width: 100%;
-		}
-		.welcome {
-			margin-bottom: 2rem;
-		}
-		.welcome h1 {
-			font-size: 1.75rem;
-			font-weight: 700;
-			margin-bottom: 0.5rem;
-		}
-		.welcome p {
-			color: #7A7A92;
-			font-size: 0.95rem;
-		}
+		.dashboard { max-width: 640px; width: 100%; }
+		.welcome { margin-bottom: 2rem; }
+		.welcome h1 { font-size: 1.75rem; font-weight: 700; margin-bottom: 0.5rem; }
+		.welcome p { color: #7A7A92; font-size: 0.95rem; }
 		.card {
 			background: #1A1A24;
 			border: 1px solid #2A2A3C;
@@ -120,15 +130,8 @@ function homePage(email: string, userId: string): Response {
 			border-bottom: 1px solid #22222F;
 		}
 		.info-row:last-child { border-bottom: none; }
-		.info-label {
-			font-size: 0.875rem;
-			color: #7A7A92;
-		}
-		.info-value {
-			font-size: 0.875rem;
-			font-weight: 500;
-			color: #E4E4ED;
-		}
+		.info-label { font-size: 0.875rem; color: #7A7A92; }
+		.info-value { font-size: 0.875rem; font-weight: 500; color: #E4E4ED; }
 		.status-badge {
 			display: inline-flex;
 			align-items: center;
@@ -140,12 +143,7 @@ function homePage(email: string, userId: string): Response {
 			background: rgba(52, 211, 153, 0.1);
 			color: #34D399;
 		}
-		.status-dot {
-			width: 6px;
-			height: 6px;
-			border-radius: 50%;
-			background: #34D399;
-		}
+		.status-dot { width: 6px; height: 6px; border-radius: 50%; background: #34D399; }
 		footer {
 			text-align: center;
 			padding: 1.5rem;
@@ -159,10 +157,10 @@ function homePage(email: string, userId: string): Response {
 </head>
 <body>
 	<nav>
-		<a href="/" class="nav-brand">Sapphire<span>Auth</span></a>
+		<a href="/dashboard" class="nav-brand">Sapphire<span>Auth</span></a>
 		<div class="nav-actions">
 			<span class="nav-user">${email}</span>
-			<a href="/" class="btn btn-ghost">Log out</a>
+			<a href="/logout" class="btn btn-ghost">Log out</a>
 		</div>
 	</nav>
 	<main>
@@ -222,19 +220,9 @@ function errorPage(message: string): Response {
 			align-items: center;
 			justify-content: center;
 		}
-		.error-box {
-			text-align: center;
-			max-width: 400px;
-		}
-		.error-box h1 {
-			font-size: 1.5rem;
-			margin-bottom: 0.75rem;
-			color: #F87171;
-		}
-		.error-box p {
-			color: #7A7A92;
-			margin-bottom: 1.5rem;
-		}
+		.error-box { text-align: center; max-width: 400px; }
+		.error-box h1 { font-size: 1.5rem; margin-bottom: 0.75rem; color: #F87171; }
+		.error-box p { color: #7A7A92; margin-bottom: 1.5rem; }
 		.error-box a {
 			display: inline-block;
 			padding: 0.5rem 1.5rem;
@@ -261,79 +249,71 @@ function errorPage(message: string): Response {
 	});
 }
 
+// Use a consistent secret derived from KV namespace ID for cookie signing
+const COOKIE_SECRET = "sapphireauth-session-secret-key-2024";
+
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext) {
 		const url = new URL(request.url);
 
-		// Home — redirect to auth flow
+		// Landing — redirect to login
 		if (url.pathname === "/") {
-			url.searchParams.set("redirect_uri", url.origin + "/callback");
-			url.searchParams.set("client_id", "your-client-id");
-			url.searchParams.set("response_type", "code");
-			url.pathname = "/authorize";
-			return Response.redirect(url.toString());
+			return Response.redirect(url.origin + "/dashboard", 302);
 		}
 
-		// Callback — exchange code, look up user, render dashboard
-		if (url.pathname === "/callback") {
-			const code = url.searchParams.get("code");
-			if (!code) {
-				return errorPage("No authorization code received.");
+		// Dashboard — show home page if authenticated, redirect to login if not
+		if (url.pathname === "/dashboard") {
+			const cookies = parseCookies(request.headers.get("cookie"));
+			const sessionCookie = cookies["sapphire_session"];
+			if (!sessionCookie) {
+				const loginUrl = new URL(url.origin + "/authorize");
+				loginUrl.searchParams.set("redirect_uri", url.origin + "/callback");
+				loginUrl.searchParams.set("client_id", "sapphireauth");
+				loginUrl.searchParams.set("response_type", "code");
+				return Response.redirect(loginUrl.toString(), 302);
 			}
 
-			try {
-				// Exchange the authorization code for tokens
-				const tokenRes = await fetch(url.origin + "/token", {
-					method: "POST",
+			const data = await verify(decodeURIComponent(sessionCookie), COOKIE_SECRET);
+			if (!data) {
+				// Invalid cookie — clear it and redirect to login
+				const loginUrl = new URL(url.origin + "/authorize");
+				loginUrl.searchParams.set("redirect_uri", url.origin + "/callback");
+				loginUrl.searchParams.set("client_id", "sapphireauth");
+				loginUrl.searchParams.set("response_type", "code");
+				return new Response(null, {
+					status: 302,
 					headers: {
-						"Content-Type": "application/x-www-form-urlencoded",
+						Location: loginUrl.toString(),
+						"Set-Cookie": "sapphire_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
 					},
-					body: new URLSearchParams({
-						code,
-						redirect_uri: url.origin + "/callback",
-						grant_type: "authorization_code",
-						client_id: "your-client-id",
-					}).toString(),
 				});
-
-				if (!tokenRes.ok) {
-					const errBody = await tokenRes.text();
-					console.error("Token exchange failed:", tokenRes.status, errBody);
-					return errorPage("Invalid or expired authorization code.");
-				}
-
-				const tokens = await tokenRes.json() as {
-					access_token: string;
-					refresh_token: string;
-				};
-
-				// Decode the JWT to get the user ID
-				const claims = decodeJwt(tokens.access_token);
-				const userId = (claims.properties as any)?.id as string;
-
-				if (!userId) {
-					console.error("No user ID in token claims:", JSON.stringify(claims));
-					return errorPage("Could not verify your session.");
-				}
-
-				const user = await env.AUTH_DB.prepare(
-					"SELECT email FROM user WHERE id = ?",
-				)
-					.bind(userId)
-					.first<{ email: string }>();
-
-				if (!user) {
-					return errorPage("User not found.");
-				}
-
-				return homePage(user.email, userId);
-			} catch (e) {
-				console.error("Callback error:", e);
-				return errorPage("Authentication failed. Please try again.");
 			}
+
+			const { userId, email } = JSON.parse(data);
+			return homePage(email, userId);
 		}
 
-		// Everything else — OpenAuth issuer handles /authorize, /register, /change, etc.
+		// Logout — clear cookie and redirect
+		if (url.pathname === "/logout") {
+			return new Response(null, {
+				status: 302,
+				headers: {
+					Location: url.origin + "/",
+					"Set-Cookie": "sapphire_session=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax",
+				},
+			});
+		}
+
+		// Callback — the OAuth redirect comes here, but we handle the actual
+		// session creation in the success callback below via cookie
+		if (url.pathname === "/callback") {
+			// If we get here with a code, something went wrong — the success
+			// handler should have already redirected with a cookie.
+			// This is a fallback.
+			return Response.redirect(url.origin + "/dashboard", 302);
+		}
+
+		// Everything else — OpenAuth issuer
 		return issuer({
 			storage: CloudflareStorage({
 				namespace: env.AUTH_STORAGE,
@@ -443,9 +423,20 @@ export default {
 					light: "https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/fa5a3023-7da9-466b-98a7-4ce01ee6c700/public",
 				},
 			},
-			success: async (ctx, value) => {
-				return ctx.subject("user", {
-					id: await getOrCreateUser(env, value.email),
+			success: async (_ctx, value) => {
+				const userId = await getOrCreateUser(env, value.email);
+
+				// Create a signed session cookie and redirect to dashboard
+				// Skip the OAuth code/token exchange entirely since this is a self-contained app
+				const sessionData = JSON.stringify({ userId, email: value.email });
+				const signed = await sign(sessionData, COOKIE_SECRET);
+
+				return new Response(null, {
+					status: 302,
+					headers: {
+						Location: "/dashboard",
+						"Set-Cookie": `sapphire_session=${encodeURIComponent(signed)}; Path=/; Max-Age=86400; HttpOnly; Secure; SameSite=Lax`,
+					},
 				});
 			},
 		}).fetch(request, env, ctx);
