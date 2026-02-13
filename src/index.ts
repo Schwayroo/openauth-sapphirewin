@@ -1,10 +1,10 @@
 import { issuer } from "@openauthjs/openauth";
-import { createClient } from "@openauthjs/openauth/client";
 import { CloudflareStorage } from "@openauthjs/openauth/storage/cloudflare";
 import { PasswordProvider } from "@openauthjs/openauth/provider/password";
 import { PasswordUI } from "@openauthjs/openauth/ui/password";
 import { createSubjects } from "@openauthjs/openauth/subject";
 import { object, string } from "valibot";
+import { decodeJwt } from "jose";
 
 const subjects = createSubjects({
 	user: object({
@@ -282,28 +282,40 @@ export default {
 			}
 
 			try {
-				const client = createClient({
-					clientID: "your-client-id",
-					issuer: url.origin,
+				// Exchange the authorization code for tokens
+				const tokenRes = await fetch(url.origin + "/token", {
+					method: "POST",
+					headers: {
+						"Content-Type": "application/x-www-form-urlencoded",
+					},
+					body: new URLSearchParams({
+						code,
+						redirect_uri: url.origin + "/callback",
+						grant_type: "authorization_code",
+						client_id: "your-client-id",
+					}).toString(),
 				});
 
-				const exchanged = await client.exchange(
-					code,
-					url.origin + "/callback",
-				);
-				if (exchanged.err) {
+				if (!tokenRes.ok) {
+					const errBody = await tokenRes.text();
+					console.error("Token exchange failed:", tokenRes.status, errBody);
 					return errorPage("Invalid or expired authorization code.");
 				}
 
-				const verified = await client.verify(
-					subjects,
-					exchanged.tokens.access,
-				);
-				if (verified.err) {
+				const tokens = await tokenRes.json() as {
+					access_token: string;
+					refresh_token: string;
+				};
+
+				// Decode the JWT to get the user ID
+				const claims = decodeJwt(tokens.access_token);
+				const userId = (claims.properties as any)?.id as string;
+
+				if (!userId) {
+					console.error("No user ID in token claims:", JSON.stringify(claims));
 					return errorPage("Could not verify your session.");
 				}
 
-				const userId = verified.subject.properties.id;
 				const user = await env.AUTH_DB.prepare(
 					"SELECT email FROM user WHERE id = ?",
 				)
