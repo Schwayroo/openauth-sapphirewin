@@ -1,9 +1,12 @@
 -- Migration number: 0002    Platform tables
 -- Add profile fields and role to user
-ALTER TABLE user ADD COLUMN username TEXT UNIQUE;
+ALTER TABLE user ADD COLUMN username TEXT;
 ALTER TABLE user ADD COLUMN avatar_url TEXT;
 ALTER TABLE user ADD COLUMN role TEXT NOT NULL DEFAULT 'member';
 ALTER TABLE user ADD COLUMN bio TEXT;
+
+-- Unique constraint via index (SQLite/D1 can't add UNIQUE column via ALTER)
+CREATE UNIQUE INDEX IF NOT EXISTS user_username_unique ON user(username);
 
 -- Set initial admin
 UPDATE user SET role = 'admin' WHERE email = 'schwayro25@gmail.com';
