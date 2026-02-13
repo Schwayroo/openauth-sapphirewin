@@ -51,7 +51,7 @@ function homePage(email: string, userId: string): Response {
 	<meta charset="utf-8" />
 	<meta name="viewport" content="width=device-width, initial-scale=1" />
 	<title>SapphireAuth — Dashboard</title>
-	<link rel="icon" href="https://workers.cloudflare.com//favicon.ico" />
+	<link rel="icon" href="https://files.catbox.moe/2kxof5.webp" />
 	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 	<style>
 		*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -417,7 +417,7 @@ export default {
 						}
 					}
 				`,
-				favicon: "https://workers.cloudflare.com//favicon.ico",
+				favicon: "https://files.catbox.moe/2kxof5.webp",
 				logo: {
 					dark: "https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/db1e5c92-d3a6-4ea9-3e72-155844211f00/public",
 					light: "https://imagedelivery.net/wSMYJvS3Xw-n339CbDyDIA/fa5a3023-7da9-466b-98a7-4ce01ee6c700/public",
