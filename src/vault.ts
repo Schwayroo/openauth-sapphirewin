@@ -37,6 +37,13 @@ export async function createVaultFile(env: Env, input: { ownerId: string; r2Key:
 	return res.id;
 }
 
+export async function deleteVaultFile(env: Env, id: string, ownerId: string) {
+	// Return the r2_key so caller can delete from R2.
+	return env.AUTH_DB.prepare("DELETE FROM vault_file WHERE id = ? AND owner_id = ? RETURNING r2_key")
+		.bind(id, ownerId)
+		.first<{ r2_key: string }>();
+}
+
 export function guessPreviewKind(mime: string | null, fileName: string): "image" | "video" | "audio" | "text" | "other" {
 	const m = (mime ?? "").toLowerCase();
 	if (m.startsWith("image/")) return "image";

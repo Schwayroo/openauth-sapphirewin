@@ -116,6 +116,9 @@ export function vaultPreviewPage(session: Session, f: VaultFileRow, previewUrl: 
 					</div>
 					<div class="row">
 						<a class="btn" href="/vault">Back</a>
+						<form method="POST" action="/vault/${f.id}/delete" onsubmit="return confirm('Delete this file? This cannot be undone.');" style="display:inline;">
+							<button class="btn" type="submit">Delete</button>
+						</form>
 						<a class="btn btn-primary" href="/vault/${f.id}/download">Download</a>
 					</div>
 				</div>

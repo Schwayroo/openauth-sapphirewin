@@ -12,7 +12,7 @@ import { dashboardPage } from "./pages/dashboard";
 import { profilePage } from "./pages/profile";
 import { adminUsersPage } from "./pages/admin";
 import { vaultListPage, vaultPreviewPage } from "./pages/vault";
-import { createVaultFile, getVaultFile, listVaultFiles } from "./vault";
+import { createVaultFile, deleteVaultFile, getVaultFile, listVaultFiles } from "./vault";
 
 import { makeSessionCookie, getSessionFromRequest, clearSessionCookie } from "./session";
 import { redirectToLogin, refreshSessionFromDb, requireRole } from "./authz";
@@ -87,6 +87,23 @@ export default {
 			const f = await getVaultFile(env, id, fresh.userId);
 			if (!f) return errorPage("File not found");
 			return vaultPreviewPage(fresh, f, `/vault/${id}/raw`);
+		}
+
+		const vaultDeleteMatch = url.pathname.match(/^\/vault\/([a-f0-9]+)\/delete$/);
+		if (vaultDeleteMatch) {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			if (request.method !== "POST") return errorPage("Invalid method");
+			const id = vaultDeleteMatch[1];
+
+			// Delete metadata row (returns r2_key if it existed and belonged to user)
+			const deleted = await deleteVaultFile(env, id, fresh.userId);
+			if (!deleted?.r2_key) return errorPage("File not found");
+
+			// Best-effort delete the object from R2
+			ctx.waitUntil(env.R2_VAULT.delete(deleted.r2_key));
+			return Response.redirect(url.origin + "/vault", 302);
 		}
 
 		const vaultDownloadMatch = url.pathname.match(/^\/vault\/([a-f0-9]+)\/download$/);
