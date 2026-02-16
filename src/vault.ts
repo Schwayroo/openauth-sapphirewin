@@ -19,6 +19,16 @@ export async function listVaultFiles(env: Env, ownerId: string) {
 	return res.results;
 }
 
+export async function listMediaFiles(env: Env, ownerId: string) {
+	// Images + videos for Photos gallery
+	const res = await env.AUTH_DB.prepare(
+		"SELECT id, owner_id, r2_key, file_name, mime_type, size_bytes, created_at FROM vault_file WHERE owner_id = ? AND (mime_type LIKE 'image/%' OR mime_type LIKE 'video/%') ORDER BY created_at DESC",
+	)
+		.bind(ownerId)
+		.all<VaultFileRow>();
+	return res.results;
+}
+
 export async function getVaultFile(env: Env, id: string, ownerId: string) {
 	return env.AUTH_DB.prepare(
 		"SELECT id, owner_id, r2_key, file_name, mime_type, size_bytes, created_at FROM vault_file WHERE id = ? AND owner_id = ?",
@@ -38,7 +48,6 @@ export async function createVaultFile(env: Env, input: { ownerId: string; r2Key:
 }
 
 export async function deleteVaultFile(env: Env, id: string, ownerId: string) {
-	// Return the r2_key so caller can delete from R2.
 	return env.AUTH_DB.prepare("DELETE FROM vault_file WHERE id = ? AND owner_id = ? RETURNING r2_key")
 		.bind(id, ownerId)
 		.first<{ r2_key: string }>();

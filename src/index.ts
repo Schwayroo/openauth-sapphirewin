@@ -16,8 +16,9 @@ import { getUserSettings, updateUserSettings } from "./settings";
 import { adminUsersPage } from "./pages/admin";
 import { vaultListPage, vaultPreviewPage } from "./pages/vault";
 import { passwordsPage } from "./pages/passwords";
+import { photosPage } from "./pages/photos";
 import { getPasswordVault, upsertPasswordVault } from "./passwords";
-import { createVaultFile, deleteVaultFile, getVaultFile, listVaultFiles } from "./vault";
+import { createVaultFile, deleteVaultFile, getVaultFile, listMediaFiles, listVaultFiles } from "./vault";
 
 import { makeSessionCookie, getSessionFromRequest, clearSessionCookie } from "./session";
 import { redirectToLogin, refreshSessionFromDb, requireRole } from "./authz";
@@ -176,6 +177,14 @@ export default {
 					"Cache-Control": "private, max-age=0",
 				},
 			});
+		}
+
+		if (url.pathname === "/photos") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			const media = await listMediaFiles(env, fresh.userId);
+			return photosPage(fresh, media);
 		}
 
 		// Password vault
