@@ -9,6 +9,7 @@ import type { Env } from "./db";
 import { getUserById, listUsers, setUserRole } from "./db";
 import { errorPage } from "./pages/error";
 import { dashboardPage } from "./pages/dashboard";
+import { getDashboardStats } from "./stats";
 import { homePage } from "./pages/home";
 import { profilePage } from "./pages/profile";
 import { getUserSettings, updateUserSettings } from "./settings";
@@ -217,7 +218,8 @@ export default {
 			const session = await getSessionFromRequest(request, COOKIE_SECRET);
 			if (!session) return redirectToLogin(url);
 			const fresh = await refreshSessionFromDb(env, session);
-			return dashboardPage(fresh);
+			const stats = await getDashboardStats(env, fresh.userId);
+			return dashboardPage(fresh, stats);
 		}
 
 		// Profile
