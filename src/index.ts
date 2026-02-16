@@ -10,6 +10,7 @@ import { getUserById, listUsers, setUserRole } from "./db";
 import { errorPage } from "./pages/error";
 import { dashboardPage } from "./pages/dashboard";
 import { profilePage } from "./pages/profile";
+import { getUserSettings, updateUserSettings } from "./settings";
 import { adminUsersPage } from "./pages/admin";
 import { vaultListPage, vaultPreviewPage } from "./pages/vault";
 import { createVaultFile, deleteVaultFile, getVaultFile, listVaultFiles } from "./vault";
@@ -70,9 +71,16 @@ export default {
 				sizeBytes: file.size,
 			});
 
-			// Optional Telegram mirror (feature-flag)
-			if ((env.TELEGRAM_MIRROR_ENABLED ?? "false") === "true" && env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
-				ctx.waitUntil(mirrorToTelegram(env, file));
+			// Optional Telegram mirror (feature-flag + per-user)
+			if ((env.TELEGRAM_MIRROR_ENABLED ?? "false") === "true" && env.TELEGRAM_BOT_TOKEN) {
+				const kind = (file.type ?? "").toLowerCase();
+				const isMedia = kind.startsWith("image/") || kind.startsWith("video/");
+				if (isMedia) {
+					const settings = await getUserSettings(env, fresh.userId);
+					if (settings.telegram_mirror_enabled && settings.telegram_chat_id) {
+						ctx.waitUntil(mirrorToTelegram(env, settings.telegram_chat_id, file));
+					}
+				}
 			}
 
 			return Response.redirect(url.origin + `/vault/${id}`, 302);
@@ -120,6 +128,24 @@ export default {
 				headers: {
 					"Content-Type": f.mime_type ?? "application/octet-stream",
 					"Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(f.file_name)}`,
+				},
+			});
+		}
+
+		const vaultThumbMatch = url.pathname.match(/^\/vault\/([a-f0-9]+)\/thumb$/);
+		if (vaultThumbMatch) {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			const id = vaultThumbMatch[1];
+			const f = await getVaultFile(env, id, fresh.userId);
+			if (!f) return errorPage("File not found");
+			const obj = await env.R2_VAULT.get(f.r2_key);
+			if (!obj) return errorPage("File missing from storage");
+			return new Response(obj.body, {
+				headers: {
+					"Content-Type": f.mime_type ?? "application/octet-stream",
+					"Cache-Control": "private, max-age=0",
 				},
 			});
 		}
@@ -184,7 +210,26 @@ export default {
 
 			const user = await getUserById(env, fresh.userId);
 			if (!user) return errorPage("User not found.");
-			return profilePage(fresh, user);
+			const settings = await getUserSettings(env, fresh.userId);
+			return profilePage(fresh, user, settings);
+		}
+
+		if (url.pathname === "/profile/telegram") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			if (request.method !== "POST") return errorPage("Invalid method");
+
+			const form = await request.formData();
+			const enabled = String(form.get("telegram_enabled") ?? "0") === "1" ? 1 : 0;
+			const chatId = String(form.get("telegram_chat_id") ?? "").trim();
+
+			await updateUserSettings(env, fresh.userId, {
+				telegram_mirror_enabled: enabled,
+				telegram_chat_id: chatId || null,
+			});
+
+			return Response.redirect(url.origin + "/profile", 302);
 		}
 
 		// Logout
@@ -308,10 +353,10 @@ export default {
 	},
 };
 
-async function mirrorToTelegram(env: Env, file: File) {
+async function mirrorToTelegram(env: Env, chatId: string, file: File) {
 	try {
 		const form = new FormData();
-		form.set("chat_id", env.TELEGRAM_CHAT_ID!);
+		form.set("chat_id", chatId);
 		form.set("document", file, file.name);
 		await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN!}/sendDocument`, {
 			method: "POST",

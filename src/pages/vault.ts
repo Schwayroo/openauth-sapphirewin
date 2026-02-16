@@ -22,20 +22,29 @@ function fileIcon(kind: string) {
 	return "📦";
 }
 
+function escapeHtml(s: string) {
+	return s
+		.replaceAll("&", "&amp;")
+		.replaceAll("<", "&lt;")
+		.replaceAll(">", "&gt;")
+		.replaceAll('"', "&quot;");
+}
+
 export function vaultListPage(session: Session, files: VaultFileRow[]): Response {
 	const cards = files
 		.map((f) => {
 			const kind = guessPreviewKind(f.mime_type, f.file_name);
+			const name = escapeHtml(f.file_name);
+			const thumb = kind === "image" || kind === "video" ? `/vault/${f.id}/thumb` : "";
 			return `
-			<a class="filecard" href="/vault/${f.id}">
-				<div class="filecard-top">
-					<div class="fileicon">${fileIcon(kind)}</div>
-					<div class="filemeta">
-						<div class="filename">${f.file_name}</div>
-						<div class="small">${f.mime_type ?? "unknown"} · ${formatBytes(f.size_bytes)}</div>
-					</div>
+			<a class="filecard" href="/vault/${f.id}" aria-label="Open ${name}">
+				<div class="thumb" data-kind="${kind}">
+					${thumb ? (kind === "image" ? `<img src="${thumb}" alt="" loading="lazy" />` : `<video src="${thumb}" muted playsinline preload="metadata"></video>`) : `<div class="thumb-fallback">${fileIcon(kind)}</div>`}
 				</div>
-				<div class="small" style="margin-top:.75rem;">Uploaded ${new Date(f.created_at).toLocaleString()}</div>
+				<div class="meta">
+					<div class="filename">${name}</div>
+					<div class="small">${escapeHtml(f.mime_type ?? "unknown")} · ${formatBytes(f.size_bytes)}</div>
+				</div>
 			</a>
 		`;
 		})
@@ -50,20 +59,22 @@ export function vaultListPage(session: Session, files: VaultFileRow[]): Response
 				.vaultbar { display:flex; gap:.75rem; align-items:center; justify-content:space-between; flex-wrap:wrap; }
 				.drop { border:1px dashed #3A3A4C; border-radius:1rem; padding:1rem; background: rgba(255,255,255,.02); transition: border-color .15s ease, background .15s ease; }
 				.drop:hover { border-color: rgba(108,99,255,.55); background: rgba(108,99,255,.06); }
-				.filegrid { display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:1rem; }
-				.filecard { display:block; text-decoration:none; border:1px solid #2A2A3C; border-radius:1rem; padding:1rem; background: rgba(26,26,36,.65); transition: transform .14s ease, border-color .14s ease, background .14s ease; }
+				.filegrid { display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:1rem; }
+				.filecard { display:block; text-decoration:none; border:1px solid #2A2A3C; border-radius:1rem; overflow:hidden; background: rgba(26,26,36,.65); transition: transform .14s ease, border-color .14s ease, background .14s ease; }
 				.filecard:hover { transform: translateY(-2px); border-color: rgba(108,99,255,.45); background: rgba(26,26,36,.85); }
-				.filecard-top { display:flex; gap:.75rem; align-items:center; }
-				.fileicon { width:42px; height:42px; display:grid; place-items:center; border-radius:14px; background: rgba(108,99,255,.12); border:1px solid rgba(108,99,255,.20); }
-				.filename { font-weight:700; color:#E4E4ED; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 180px; }
-				.filemeta { min-width:0; }
+				.thumb { height: 140px; background: rgba(15,15,19,.9); display:grid; place-items:center; }
+				.thumb img, .thumb video { width:100%; height:100%; object-fit:cover; display:block; filter: saturate(1.05); }
+				.thumb video { background:#0F0F13; }
+				.thumb-fallback { width:42px; height:42px; display:grid; place-items:center; border-radius:14px; background: rgba(108,99,255,.12); border:1px solid rgba(108,99,255,.20); }
+				.meta { padding: .85rem .9rem; }
+				.filename { font-weight:700; color:#E4E4ED; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 			</style>
 
 			<div class="card">
 				<div class="vaultbar">
 					<div>
 						<div class="h1" style="margin-bottom:.25rem;">Vault</div>
-						<div class="small">Private files (R2). Image/video previews supported.</div>
+						<div class="small">Private files (R2). Thumbnails for images/videos.</div>
 					</div>
 					<div class="row">
 						<a class="btn" href="/dashboard">Home</a>
@@ -96,7 +107,7 @@ export function vaultPreviewPage(session: Session, f: VaultFileRow, previewUrl: 
 
 	let preview = `<div class="small">No preview available for this file type.</div>`;
 	if (kind === "image") {
-		preview = `<img src="${previewUrl}" alt="${f.file_name}" style="width:100%; max-height:70vh; object-fit:contain; border-radius:1rem; border:1px solid #2A2A3C; background:#0F0F13;" />`;
+		preview = `<img src="${previewUrl}" alt="${escapeHtml(f.file_name)}" style="width:100%; max-height:70vh; object-fit:contain; border-radius:1rem; border:1px solid #2A2A3C; background:#0F0F13;" />`;
 	} else if (kind === "video") {
 		preview = `<video src="${previewUrl}" controls style="width:100%; max-height:70vh; border-radius:1rem; border:1px solid #2A2A3C; background:#0F0F13;"></video>`;
 	} else if (kind === "audio") {
@@ -104,15 +115,15 @@ export function vaultPreviewPage(session: Session, f: VaultFileRow, previewUrl: 
 	}
 
 	return layout({
-		title: `SapphireVault — ${f.file_name}`,
+		title: `SapphireVault — ${escapeHtml(f.file_name)}`,
 		session,
 		active: "vault" as any,
 		content: `
 			<div class="card">
 				<div class="row" style="justify-content:space-between;">
 					<div style="min-width:0;">
-						<div class="h1" style="margin-bottom:.25rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.file_name}</div>
-						<div class="small">${f.mime_type ?? "(unknown type)"} · ${formatBytes(f.size_bytes)} · ${new Date(f.created_at).toLocaleString()}</div>
+						<div class="h1" style="margin-bottom:.25rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${escapeHtml(f.file_name)}</div>
+						<div class="small">${escapeHtml(f.mime_type ?? "(unknown type)")} · ${formatBytes(f.size_bytes)} · ${new Date(f.created_at).toLocaleString()}</div>
 					</div>
 					<div class="row">
 						<a class="btn" href="/vault">Back</a>
