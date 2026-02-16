@@ -14,7 +14,7 @@ const COLORS = {
 export function layout(opts: {
 	title: string;
 	session: Session | null;
-	active?: "dashboard" | "products" | "forum" | "profile" | "admin";
+	active?: "dashboard" | "vault" | "products" | "forum" | "profile" | "admin";
 	content: string;
 }): Response {
 	const { title, session, active, content } = opts;
@@ -73,6 +73,7 @@ export function layout(opts: {
 		<div class="nav-left">
 			<a href="/dashboard" class="nav-brand">Sapphire<span>Auth</span></a>
 			${navLink("/dashboard", "Dashboard", "dashboard")}
+			${navLink("/vault", "Vault", "vault")}
 			${navLink("/products", "Products", "products")}
 			${navLink("/forum", "Forum", "forum")}
 			${session ? navLink("/profile", "Profile", "profile") : ""}

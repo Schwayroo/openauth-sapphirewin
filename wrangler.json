@@ -3,6 +3,12 @@
 	"main": "src/index.ts",
 	"name": "openauth-sapphirewin",
 	"upload_source_maps": true,
+	"r2_buckets": [
+		{
+			"binding": "R2_VAULT",
+			"bucket_name": "sapphire-vault"
+		}
+	],
 	"kv_namespaces": [
 		{
 			"binding": "AUTH_STORAGE",

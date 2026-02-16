@@ -32,6 +32,8 @@ import {
 } from "./pages/products";
 import { forumDetailPage, forumListPage, forumNewPage } from "./pages/forum";
 import { adminUsersPage } from "./pages/admin";
+import { vaultListPage, vaultPreviewPage } from "./pages/vault";
+import { createVaultFile, getVaultFile, listVaultFiles } from "./vault";
 
 import { makeSessionCookie, getSessionFromRequest, clearSessionCookie } from "./session";
 import { redirectToLogin, refreshSessionFromDb, requireRole } from "./authz";
@@ -69,6 +71,95 @@ export default {
 		if (canon) return canon;
 
 		if (url.pathname === "/") return Response.redirect(url.origin + "/dashboard", 302);
+
+		// Vault (files)
+		if (url.pathname === "/vault") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			const files = await listVaultFiles(env, fresh.userId);
+			return vaultListPage(fresh, files);
+		}
+
+		if (url.pathname === "/vault/upload") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			if (request.method !== "POST") return errorPage("Invalid method");
+
+			const form = await request.formData();
+			const file = form.get("file");
+			if (!(file instanceof File)) return errorPage("Missing file");
+
+			// NOTE: Workers have memory limits; for large files, we should switch to multipart upload.
+			const buf = await file.arrayBuffer();
+			const r2Key = `${fresh.userId}/${crypto.randomUUID()}-${file.name}`;
+			await env.R2_VAULT.put(r2Key, buf, {
+				httpMetadata: { contentType: file.type || undefined },
+			});
+
+			const id = await createVaultFile(env, {
+				ownerId: fresh.userId,
+				r2Key,
+				fileName: file.name,
+				mimeType: file.type || null,
+				sizeBytes: file.size,
+			});
+
+			// Optional Telegram mirror (feature-flag)
+			if ((env.TELEGRAM_MIRROR_ENABLED ?? "false") === "true" && env.TELEGRAM_BOT_TOKEN && env.TELEGRAM_CHAT_ID) {
+				ctx.waitUntil(mirrorToTelegram(env, file));
+			}
+
+			return Response.redirect(url.origin + `/vault/${id}`, 302);
+		}
+
+		const vaultPreviewMatch = url.pathname.match(/^\/vault\/([a-f0-9]+)$/);
+		if (vaultPreviewMatch) {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			const id = vaultPreviewMatch[1];
+			const f = await getVaultFile(env, id, fresh.userId);
+			if (!f) return errorPage("File not found");
+			return vaultPreviewPage(fresh, f, `/vault/${id}/raw`);
+		}
+
+		const vaultDownloadMatch = url.pathname.match(/^\/vault\/([a-f0-9]+)\/download$/);
+		if (vaultDownloadMatch) {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			const id = vaultDownloadMatch[1];
+			const f = await getVaultFile(env, id, fresh.userId);
+			if (!f) return errorPage("File not found");
+			const obj = await env.R2_VAULT.get(f.r2_key);
+			if (!obj) return errorPage("File missing from storage");
+			return new Response(obj.body, {
+				headers: {
+					"Content-Type": f.mime_type ?? "application/octet-stream",
+					"Content-Disposition": `attachment; filename*=UTF-8''${encodeURIComponent(f.file_name)}`,
+				},
+			});
+		}
+
+		const vaultRawMatch = url.pathname.match(/^\/vault\/([a-f0-9]+)\/raw$/);
+		if (vaultRawMatch) {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			const id = vaultRawMatch[1];
+			const f = await getVaultFile(env, id, fresh.userId);
+			if (!f) return errorPage("File not found");
+			const obj = await env.R2_VAULT.get(f.r2_key);
+			if (!obj) return errorPage("File missing from storage");
+			return new Response(obj.body, {
+				headers: {
+					"Content-Type": f.mime_type ?? "application/octet-stream",
+					"Cache-Control": "private, max-age=0",
+				},
+			});
+		}
 
 		// Dashboard
 		if (url.pathname === "/dashboard") {
@@ -380,6 +471,21 @@ export default {
 		});
 	},
 };
+
+async function mirrorToTelegram(env: Env, file: File) {
+	try {
+		const form = new FormData();
+		form.set("chat_id", env.TELEGRAM_CHAT_ID!);
+		// sendDocument supports arbitrary files
+		form.set("document", file, file.name);
+		await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN!}/sendDocument`, {
+			method: "POST",
+			body: form,
+		});
+	} catch (e) {
+		console.error("Telegram mirror failed", e);
+	}
+}
 
 async function getOrCreateUser(env: Env, email: string): Promise<string> {
 	const existing = await env.AUTH_DB.prepare("SELECT id FROM user WHERE email = ?")
