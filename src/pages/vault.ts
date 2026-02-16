@@ -76,9 +76,7 @@ export function vaultListPage(session: Session, files: VaultFileRow[]): Response
 						<div class="h1" style="margin-bottom:.25rem;">Vault</div>
 						<div class="small">Private files (R2). Thumbnails for images/videos.</div>
 					</div>
-					<div class="row">
-						<a class="btn" href="/dashboard">Home</a>
-					</div>
+					<div class="row"></div>
 				</div>
 
 				<div class="drop" style="margin-top:1rem;">

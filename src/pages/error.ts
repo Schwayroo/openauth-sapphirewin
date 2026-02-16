@@ -19,7 +19,7 @@ export function errorPage(message: string): Response {
 	<div class="box">
 		<h1>Something went wrong</h1>
 		<p>${message}</p>
-		<a href="/dashboard">Back</a>
+		<a href="/">Home</a>
 	</div>
 </body>
 </html>`;
