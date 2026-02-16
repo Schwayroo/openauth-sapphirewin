@@ -14,53 +14,78 @@ function formatBytes(n: number) {
 	return `${v.toFixed(u === 0 ? 0 : 1)} ${units[u]}`;
 }
 
+function fileIcon(kind: string) {
+	if (kind === "image") return "🖼️";
+	if (kind === "video") return "🎞️";
+	if (kind === "audio") return "🎵";
+	if (kind === "text") return "📄";
+	return "📦";
+}
+
 export function vaultListPage(session: Session, files: VaultFileRow[]): Response {
-	const rows = files
+	const cards = files
 		.map((f) => {
 			const kind = guessPreviewKind(f.mime_type, f.file_name);
-			const badge = kind === "image" ? "Image" : kind === "video" ? "Video" : kind === "audio" ? "Audio" : kind === "text" ? "Text" : "File";
 			return `
-			<tr>
-				<td style="font-weight:700;">${f.file_name}</td>
-				<td class="small">${badge}</td>
-				<td class="small">${formatBytes(f.size_bytes)}</td>
-				<td class="small">${new Date(f.created_at).toLocaleString()}</td>
-				<td>
-					<a class="btn" href="/vault/${f.id}">Preview</a>
-					<a class="btn" href="/vault/${f.id}/download">Download</a>
-				</td>
-			</tr>
+			<a class="filecard" href="/vault/${f.id}">
+				<div class="filecard-top">
+					<div class="fileicon">${fileIcon(kind)}</div>
+					<div class="filemeta">
+						<div class="filename">${f.file_name}</div>
+						<div class="small">${f.mime_type ?? "unknown"} · ${formatBytes(f.size_bytes)}</div>
+					</div>
+				</div>
+				<div class="small" style="margin-top:.75rem;">Uploaded ${new Date(f.created_at).toLocaleString()}</div>
+			</a>
 		`;
 		})
 		.join("");
 
 	return layout({
-		title: "SapphireVault — Files",
+		title: "SapphireVault — Vault",
 		session,
 		active: "vault" as any,
 		content: `
-			<div class="card">
-				<div class="h1">Vault</div>
-				<div class="p">Upload files. Previews supported for images + video. (Private per-user.)</div>
+			<style>
+				.vaultbar { display:flex; gap:.75rem; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+				.drop { border:1px dashed #3A3A4C; border-radius:1rem; padding:1rem; background: rgba(255,255,255,.02); transition: border-color .15s ease, background .15s ease; }
+				.drop:hover { border-color: rgba(108,99,255,.55); background: rgba(108,99,255,.06); }
+				.filegrid { display:grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap:1rem; }
+				.filecard { display:block; text-decoration:none; border:1px solid #2A2A3C; border-radius:1rem; padding:1rem; background: rgba(26,26,36,.65); transition: transform .14s ease, border-color .14s ease, background .14s ease; }
+				.filecard:hover { transform: translateY(-2px); border-color: rgba(108,99,255,.45); background: rgba(26,26,36,.85); }
+				.filecard-top { display:flex; gap:.75rem; align-items:center; }
+				.fileicon { width:42px; height:42px; display:grid; place-items:center; border-radius:14px; background: rgba(108,99,255,.12); border:1px solid rgba(108,99,255,.20); }
+				.filename { font-weight:700; color:#E4E4ED; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; max-width: 180px; }
+				.filemeta { min-width:0; }
+			</style>
 
-				<form method="POST" action="/vault/upload" enctype="multipart/form-data">
-					<label class="label" for="file">Choose a file</label>
-					<input class="input" id="file" name="file" type="file" required />
-					<div style="margin-top:1rem;" class="row">
-						<button class="btn btn-primary" type="submit">Upload</button>
+			<div class="card">
+				<div class="vaultbar">
+					<div>
+						<div class="h1" style="margin-bottom:.25rem;">Vault</div>
+						<div class="small">Private files (R2). Image/video previews supported.</div>
 					</div>
-				</form>
+					<div class="row">
+						<a class="btn" href="/dashboard">Home</a>
+					</div>
+				</div>
+
+				<div class="drop" style="margin-top:1rem;">
+					<form method="POST" action="/vault/upload" enctype="multipart/form-data" class="row" style="justify-content:space-between;">
+						<div style="flex: 1 1 360px;">
+							<label class="label" for="file">Upload</label>
+							<input class="input" id="file" name="file" type="file" required />
+							<div class="small" style="margin-top:.5rem;">Tip: keep files under Worker limits (we’ll add multipart later).</div>
+						</div>
+						<div style="display:flex; align-items:end;">
+							<button class="btn btn-primary" type="submit">Upload</button>
+						</div>
+					</form>
+				</div>
 			</div>
 
-			<div class="card" style="margin-top:1rem;">
-				<table>
-					<thead>
-						<tr><th>Name</th><th>Type</th><th>Size</th><th>Uploaded</th><th></th></tr>
-					</thead>
-					<tbody>
-						${rows || `<tr><td colspan="5" class="small">No files yet.</td></tr>`}
-					</tbody>
-				</table>
+			<div style="margin-top:1rem;" class="filegrid">
+				${cards || `<div class="card"><div style="font-weight:700; margin-bottom:.35rem;">No files yet</div><div class="small">Upload your first file above.</div></div>`}
 			</div>
 		`,
 	});
@@ -85,8 +110,8 @@ export function vaultPreviewPage(session: Session, f: VaultFileRow, previewUrl: 
 		content: `
 			<div class="card">
 				<div class="row" style="justify-content:space-between;">
-					<div>
-						<div class="h1" style="margin-bottom:.25rem;">${f.file_name}</div>
+					<div style="min-width:0;">
+						<div class="h1" style="margin-bottom:.25rem; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.file_name}</div>
 						<div class="small">${f.mime_type ?? "(unknown type)"} · ${formatBytes(f.size_bytes)} · ${new Date(f.created_at).toLocaleString()}</div>
 					</div>
 					<div class="row">

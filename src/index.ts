@@ -6,31 +6,10 @@ import { createSubjects } from "@openauthjs/openauth/subject";
 import { object, string } from "valibot";
 
 import type { Env } from "./db";
-import {
-	createForumPost,
-	createProduct,
-	getProduct,
-	getUserById,
-	listForumPosts,
-	listForumReplies,
-	listProducts,
-	listUsers,
-	setUserRole,
-	addForumReply,
-	getForumPost,
-	updateProduct,
-	deleteForumPost,
-} from "./db";
+import { getUserById, listUsers, setUserRole } from "./db";
 import { errorPage } from "./pages/error";
 import { dashboardPage } from "./pages/dashboard";
 import { profilePage } from "./pages/profile";
-import {
-	productDetailPage,
-	productEditPage,
-	productNewPage,
-	productsListPage,
-} from "./pages/products";
-import { forumDetailPage, forumListPage, forumNewPage } from "./pages/forum";
 import { adminUsersPage } from "./pages/admin";
 import { vaultListPage, vaultPreviewPage } from "./pages/vault";
 import { createVaultFile, getVaultFile, listVaultFiles } from "./vault";
@@ -48,21 +27,6 @@ const subjects = createSubjects({
 });
 
 const COOKIE_SECRET = "sapphireauth-session-secret-key-2024";
-
-function parsePriceToCents(price: string): number | null {
-	const n = Number(price);
-	if (!Number.isFinite(n) || n < 0) return null;
-	return Math.round(n * 100);
-}
-
-function splitImageUrls(images: string): string[] {
-	if (!images.trim()) return [];
-	return images
-		.split(",")
-		.map((s) => s.trim())
-		.filter((s) => s.length)
-		.filter((s) => /^https?:\/\//.test(s));
-}
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext) {
@@ -218,151 +182,6 @@ export default {
 			});
 		}
 
-		// Products
-		if (url.pathname === "/products") {
-			const session = await getSessionFromRequest(request, COOKIE_SECRET);
-			const products = await listProducts(env);
-			return productsListPage(session, products);
-		}
-
-		if (url.pathname === "/products/new") {
-			const session = await getSessionFromRequest(request, COOKIE_SECRET);
-			if (!session) return redirectToLogin(url);
-			const fresh = await refreshSessionFromDb(env, session);
-			// You sell, others buy: only admin can create/edit listings
-			if (!requireRole(fresh, ["admin"])) return errorPage("Only admin can create product listings.");
-
-			if (request.method === "POST") {
-				const form = await request.formData();
-				const title = String(form.get("title") ?? "").trim();
-				const description = String(form.get("description") ?? "");
-				const price = String(form.get("price") ?? "").trim();
-				const images = String(form.get("images") ?? "");
-
-				if (!title) return errorPage("Title is required.");
-				const priceCents = parsePriceToCents(price);
-				if (priceCents === null) return errorPage("Invalid price.");
-
-				await createProduct(env, fresh.userId, {
-					title,
-					description,
-					priceCents,
-					currency: "USD",
-					imageUrls: splitImageUrls(images),
-				});
-				return Response.redirect(url.origin + "/products", 302);
-			}
-
-			return productNewPage(fresh);
-		}
-
-		const productMatch = url.pathname.match(/^\/products\/([a-f0-9]+)$/);
-		if (productMatch) {
-			const session = await getSessionFromRequest(request, COOKIE_SECRET);
-			const id = productMatch[1];
-			const product = await getProduct(env, id);
-			if (!product) return errorPage("Product not found.");
-			const canEdit = session?.role === "admin";
-			return productDetailPage(session, product, canEdit);
-		}
-
-		const productEditMatch = url.pathname.match(/^\/products\/([a-f0-9]+)\/edit$/);
-		if (productEditMatch) {
-			const session = await getSessionFromRequest(request, COOKIE_SECRET);
-			if (!session) return redirectToLogin(url);
-			const fresh = await refreshSessionFromDb(env, session);
-			if (!requireRole(fresh, ["admin"])) return errorPage("Only admin can edit listings.");
-
-			const id = productEditMatch[1];
-			const product = await getProduct(env, id);
-			if (!product) return errorPage("Product not found.");
-
-			if (request.method === "POST") {
-				const form = await request.formData();
-				const title = String(form.get("title") ?? "").trim();
-				const description = String(form.get("description") ?? "");
-				const price = String(form.get("price") ?? "").trim();
-				const images = String(form.get("images") ?? "");
-
-				const priceCents = parsePriceToCents(price);
-				if (!title) return errorPage("Title is required.");
-				if (priceCents === null) return errorPage("Invalid price.");
-
-				await updateProduct(env, id, {
-					title,
-					description,
-					priceCents,
-					currency: "USD",
-					imageUrls: splitImageUrls(images),
-				});
-				return Response.redirect(url.origin + `/products/${id}`, 302);
-			}
-
-			return productEditPage(fresh, product);
-		}
-
-		// Forum
-		if (url.pathname === "/forum") {
-			const session = await getSessionFromRequest(request, COOKIE_SECRET);
-			const posts = await listForumPosts(env);
-			return forumListPage(session, posts);
-		}
-
-		if (url.pathname === "/forum/new") {
-			const session = await getSessionFromRequest(request, COOKIE_SECRET);
-			if (!session) return redirectToLogin(url);
-			const fresh = await refreshSessionFromDb(env, session);
-
-			if (request.method === "POST") {
-				const form = await request.formData();
-				const title = String(form.get("title") ?? "").trim();
-				const body = String(form.get("body") ?? "");
-				if (!title || !body.trim()) return errorPage("Title and body are required.");
-				await createForumPost(env, fresh.userId, title, body);
-				return Response.redirect(url.origin + "/forum", 302);
-			}
-
-			return forumNewPage(fresh);
-		}
-
-		const forumPostMatch = url.pathname.match(/^\/forum\/([a-f0-9]+)$/);
-		if (forumPostMatch) {
-			const session = await getSessionFromRequest(request, COOKIE_SECRET);
-			const postId = forumPostMatch[1];
-			const post = await getForumPost(env, postId);
-			if (!post) return errorPage("Post not found.");
-			const replies = await listForumReplies(env, postId);
-			const canModerate = session?.role === "admin" || session?.role === "moderator";
-			return forumDetailPage(session, post, replies, canModerate);
-		}
-
-		const forumReplyMatch = url.pathname.match(/^\/forum\/([a-f0-9]+)\/reply$/);
-		if (forumReplyMatch) {
-			const session = await getSessionFromRequest(request, COOKIE_SECRET);
-			if (!session) return redirectToLogin(url);
-			const fresh = await refreshSessionFromDb(env, session);
-
-			const postId = forumReplyMatch[1];
-			if (request.method !== "POST") return errorPage("Invalid method");
-			const form = await request.formData();
-			const body = String(form.get("body") ?? "");
-			if (!body.trim()) return errorPage("Reply body required.");
-			await addForumReply(env, postId, fresh.userId, body);
-			return Response.redirect(url.origin + `/forum/${postId}`, 302);
-		}
-
-		const forumDeleteMatch = url.pathname.match(/^\/forum\/([a-f0-9]+)\/delete$/);
-		if (forumDeleteMatch) {
-			const session = await getSessionFromRequest(request, COOKIE_SECRET);
-			if (!session) return redirectToLogin(url);
-			const fresh = await refreshSessionFromDb(env, session);
-			if (!requireRole(fresh, ["admin", "moderator"])) return errorPage("Not allowed");
-			const postId = forumDeleteMatch[1];
-			if (request.method !== "POST") return errorPage("Invalid method");
-			await deleteForumPost(env, postId);
-			return Response.redirect(url.origin + "/forum", 302);
-		}
-
 		// Admin
 		if (url.pathname === "/admin") {
 			const session = await getSessionFromRequest(request, COOKIE_SECRET);
@@ -384,7 +203,7 @@ export default {
 			const userId = adminRoleMatch[1];
 			const form = await request.formData();
 			const role = String(form.get("role") ?? "member");
-			if (!['member','moderator','admin'].includes(role)) return errorPage("Invalid role");
+			if (!["member", "moderator", "admin"].includes(role)) return errorPage("Invalid role");
 			await setUserRole(env, userId, role);
 			return Response.redirect(url.origin + "/admin", 302);
 		}
@@ -442,7 +261,6 @@ export default {
 				font: { family: "Inter, system-ui, sans-serif" },
 			},
 			success: async (response, value, req) => {
-				// Password provider value includes email
 				const email = (value as any).email as string;
 				const userId = await getOrCreateUser(env, email);
 				const user = await env.AUTH_DB.prepare("SELECT role, username FROM user WHERE id = ?")
@@ -477,7 +295,6 @@ async function mirrorToTelegram(env: Env, file: File) {
 	try {
 		const form = new FormData();
 		form.set("chat_id", env.TELEGRAM_CHAT_ID!);
-		// sendDocument supports arbitrary files
 		form.set("document", file, file.name);
 		await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN!}/sendDocument`, {
 			method: "POST",

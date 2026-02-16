@@ -14,7 +14,7 @@ const COLORS = {
 export function layout(opts: {
 	title: string;
 	session: Session | null;
-	active?: "dashboard" | "vault" | "products" | "forum" | "profile" | "admin";
+	active?: "dashboard" | "vault" | "profile" | "admin";
 	content: string;
 }): Response {
 	const { title, session, active, content } = opts;
@@ -38,18 +38,20 @@ export function layout(opts: {
 	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
 	<style>
 		*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
-		body { font-family: 'Inter', system-ui, sans-serif; background: ${COLORS.bg}; color: ${COLORS.text}; min-height: 100vh; }
-		nav { display:flex; justify-content:space-between; align-items:center; padding: 1rem 2rem; border-bottom: 1px solid ${COLORS.borderSoft}; background:#13131A; }
+		:root { color-scheme: dark; }
+		body { font-family: 'Inter', system-ui, sans-serif; background: radial-gradient(1200px 600px at 20% -10%, rgba(108,99,255,.20), transparent 60%), radial-gradient(900px 500px at 80% 0%, rgba(108,99,255,.10), transparent 60%), ${COLORS.bg}; color: ${COLORS.text}; min-height: 100vh; }
+		nav { position:sticky; top:0; z-index:10; backdrop-filter: blur(10px); display:flex; justify-content:space-between; align-items:center; padding: 1rem 2rem; border-bottom: 1px solid ${COLORS.borderSoft}; background: rgba(19,19,26,.75); }
 		.nav-brand { font-size:1.25rem; font-weight:700; color:${COLORS.accent}; text-decoration:none; }
 		.nav-brand span { color:${COLORS.text}; }
 		.nav-left { display:flex; align-items:center; gap:.75rem; }
 		.nav-right { display:flex; align-items:center; gap:.75rem; }
-		.nav-link { display:inline-flex; align-items:center; padding:.45rem .9rem; border-radius:.75rem; border:1px solid ${COLORS.border}; text-decoration:none; font-size:.875rem; color:${COLORS.muted}; }
-		.nav-link:hover { border-color:#3A3A4C; color:${COLORS.text}; }
+		.nav-link { display:inline-flex; align-items:center; padding:.45rem .9rem; border-radius:.75rem; border:1px solid ${COLORS.border}; text-decoration:none; font-size:.875rem; color:${COLORS.muted}; transition: transform .12s ease, border-color .12s ease, background .12s ease, color .12s ease; }
+		.nav-link:hover { border-color:#3A3A4C; color:${COLORS.text}; background: rgba(255,255,255,.03); transform: translateY(-1px); }
 		.badge { padding:.2rem .55rem; border-radius:999px; font-size:.75rem; border:1px solid ${COLORS.border}; color:${COLORS.muted}; }
 		main { display:flex; justify-content:center; padding: 2.5rem 2rem; }
 		.container { width:100%; max-width: 980px; }
-		.card { background:${COLORS.card}; border:1px solid ${COLORS.border}; border-radius:1rem; padding:1.25rem; }
+		.card { background: linear-gradient(180deg, rgba(26,26,36,.92), rgba(26,26,36,.72)); border:1px solid ${COLORS.border}; border-radius:1rem; padding:1.25rem; box-shadow: 0 12px 40px rgba(0,0,0,.35); animation: cardIn .25s ease-out; }
+		@keyframes cardIn { from { transform: translateY(6px); opacity: .0; } to { transform: translateY(0); opacity: 1; } }
 		.h1 { font-size: 1.6rem; font-weight:700; margin-bottom:.5rem; }
 		.p { color:${COLORS.muted}; margin-bottom:1.25rem; }
 		.grid { display:grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap:1rem; }
@@ -74,8 +76,6 @@ export function layout(opts: {
 			<a href="/dashboard" class="nav-brand">Sapphire<span>Auth</span></a>
 			${navLink("/dashboard", "Dashboard", "dashboard")}
 			${navLink("/vault", "Vault", "vault")}
-			${navLink("/products", "Products", "products")}
-			${navLink("/forum", "Forum", "forum")}
 			${session ? navLink("/profile", "Profile", "profile") : ""}
 			${adminLink}
 		</div>
