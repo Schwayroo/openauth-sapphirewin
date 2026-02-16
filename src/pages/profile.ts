@@ -49,6 +49,10 @@ export function profilePage(
 							<option value="1" ${settings.telegram_mirror_enabled ? "selected" : ""}>On</option>
 						</select>
 
+						<label class="label" for="telegram_bot_token">Your bot token</label>
+						<input class="input" id="telegram_bot_token" name="telegram_bot_token" placeholder="123456:ABC..." value="${settings.telegram_bot_token ?? ""}" />
+						<div class="small" style="margin-top:.5rem;">This is stored in your account settings so your uploads can be forwarded. Treat it like a password.</div>
+
 						<label class="label" for="telegram_chat_id">Telegram chat id (group)</label>
 						<input class="input" id="telegram_chat_id" name="telegram_chat_id" placeholder="ex: -1001234567890" value="${settings.telegram_chat_id ?? ""}" />
 						<div class="small" style="margin-top:.5rem;">Tip: add your bot to the group, then use @RawDataBot or getUpdates to find the chat id.</div>

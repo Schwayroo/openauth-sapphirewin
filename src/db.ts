@@ -8,9 +8,7 @@ export type Env = {
 	RESEND_FROM: string;
 	CANONICAL_HOST?: string;
 
-	// Optional: Telegram upload mirror
-	TELEGRAM_BOT_TOKEN?: string;
-	TELEGRAM_CHAT_ID?: string;
+	// Optional: Telegram upload mirror (user-provided bot token)
 	TELEGRAM_MIRROR_ENABLED?: string; // "true" | "false"
 };
 

@@ -13,6 +13,8 @@ import { profilePage } from "./pages/profile";
 import { getUserSettings, updateUserSettings } from "./settings";
 import { adminUsersPage } from "./pages/admin";
 import { vaultListPage, vaultPreviewPage } from "./pages/vault";
+import { passwordsPage } from "./pages/passwords";
+import { getPasswordVault, upsertPasswordVault } from "./passwords";
 import { createVaultFile, deleteVaultFile, getVaultFile, listVaultFiles } from "./vault";
 
 import { makeSessionCookie, getSessionFromRequest, clearSessionCookie } from "./session";
@@ -72,13 +74,15 @@ export default {
 			});
 
 			// Optional Telegram mirror (feature-flag + per-user)
-			if ((env.TELEGRAM_MIRROR_ENABLED ?? "false") === "true" && env.TELEGRAM_BOT_TOKEN) {
+			if ((env.TELEGRAM_MIRROR_ENABLED ?? "false") === "true") {
 				const kind = (file.type ?? "").toLowerCase();
 				const isMedia = kind.startsWith("image/") || kind.startsWith("video/");
 				if (isMedia) {
 					const settings = await getUserSettings(env, fresh.userId);
 					if (settings.telegram_mirror_enabled && settings.telegram_chat_id) {
-						ctx.waitUntil(mirrorToTelegram(env, settings.telegram_chat_id, file));
+						if (settings.telegram_bot_token) {
+							ctx.waitUntil(mirrorToTelegram(settings.telegram_bot_token, settings.telegram_chat_id, file));
+						}
 					}
 				}
 			}
@@ -168,6 +172,41 @@ export default {
 			});
 		}
 
+		// Password vault
+		if (url.pathname === "/passwords") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+
+			if (request.method === "POST") {
+				const body = await request.json<any>();
+				if (!body?.ct || !body?.salt || !body?.iv || !body?.kdf || !body?.kdf_params) return errorPage("Bad request");
+				await upsertPasswordVault(env, {
+					ownerId: fresh.userId,
+					vaultBlob: JSON.stringify(body),
+					kdf: String(body.kdf),
+					kdfParams: JSON.stringify(body.kdf_params),
+				});
+				return new Response("ok");
+			}
+
+			const existing = await getPasswordVault(env, fresh.userId);
+			return passwordsPage(fresh, {
+				hasVault: !!existing,
+				updatedAt: existing?.updated_at,
+				kdf: existing?.kdf,
+			});
+		}
+
+		if (url.pathname === "/passwords/data") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			const existing = await getPasswordVault(env, fresh.userId);
+			if (!existing) return new Response("No vault", { status: 404 });
+			return new Response(existing.vault_blob, { headers: { "Content-Type": "application/json" } });
+		}
+
 		// Dashboard
 		if (url.pathname === "/dashboard") {
 			const session = await getSessionFromRequest(request, COOKIE_SECRET);
@@ -223,10 +262,12 @@ export default {
 			const form = await request.formData();
 			const enabled = String(form.get("telegram_enabled") ?? "0") === "1" ? 1 : 0;
 			const chatId = String(form.get("telegram_chat_id") ?? "").trim();
+			const botToken = String(form.get("telegram_bot_token") ?? "").trim();
 
 			await updateUserSettings(env, fresh.userId, {
 				telegram_mirror_enabled: enabled,
 				telegram_chat_id: chatId || null,
+				telegram_bot_token: botToken || null,
 			});
 
 			return Response.redirect(url.origin + "/profile", 302);
@@ -353,12 +394,12 @@ export default {
 	},
 };
 
-async function mirrorToTelegram(env: Env, chatId: string, file: File) {
+async function mirrorToTelegram(botToken: string, chatId: string, file: File) {
 	try {
 		const form = new FormData();
 		form.set("chat_id", chatId);
 		form.set("document", file, file.name);
-		await fetch(`https://api.telegram.org/bot${env.TELEGRAM_BOT_TOKEN!}/sendDocument`, {
+		await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
 			method: "POST",
 			body: form,
 		});

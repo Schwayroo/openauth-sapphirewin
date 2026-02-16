@@ -48,8 +48,8 @@ export function layout(opts: {
 		.nav-link { display:inline-flex; align-items:center; padding:.45rem .9rem; border-radius:.75rem; border:1px solid ${COLORS.border}; text-decoration:none; font-size:.875rem; color:${COLORS.muted}; transition: transform .12s ease, border-color .12s ease, background .12s ease, color .12s ease; }
 		.nav-link:hover { border-color:#3A3A4C; color:${COLORS.text}; background: rgba(255,255,255,.03); transform: translateY(-1px); }
 		.badge { padding:.2rem .55rem; border-radius:999px; font-size:.75rem; border:1px solid ${COLORS.border}; color:${COLORS.muted}; }
-		main { display:flex; justify-content:center; padding: 2.5rem 2rem; }
-		.container { width:100%; max-width: 980px; }
+		main { display:flex; justify-content:center; padding: 2.5rem 1.25rem; }
+		.container { width:100%; max-width: 1120px; }
 		.card { background: linear-gradient(180deg, rgba(26,26,36,.92), rgba(26,26,36,.72)); border:1px solid ${COLORS.border}; border-radius:1rem; padding:1.25rem; box-shadow: 0 12px 40px rgba(0,0,0,.35); animation: cardIn .25s ease-out; }
 		@keyframes cardIn { from { transform: translateY(6px); opacity: .0; } to { transform: translateY(0); opacity: 1; } }
 		.h1 { font-size: 1.6rem; font-weight:700; margin-bottom:.5rem; }
@@ -59,8 +59,9 @@ export function layout(opts: {
 		textarea { min-height: 160px; resize: vertical; }
 		.input:focus, textarea:focus { outline:none; border-color:${COLORS.accent}; box-shadow: 0 0 0 3px rgba(108,99,255,.15); }
 		.label { display:block; font-size:.85rem; color:${COLORS.muted}; margin:.9rem 0 .4rem; }
-		.btn { display:inline-flex; align-items:center; gap:.5rem; padding:.55rem 1.05rem; border-radius:.75rem; border:1px solid ${COLORS.border}; background:transparent; color:${COLORS.muted}; text-decoration:none; cursor:pointer; font-weight:600; font-size:.9rem; }
-		.btn:hover { border-color:#3A3A4C; color:${COLORS.text}; }
+		.btn { display:inline-flex; align-items:center; gap:.5rem; padding:.55rem 1.05rem; border-radius:.75rem; border:1px solid ${COLORS.border}; background:transparent; color:${COLORS.muted}; text-decoration:none; cursor:pointer; font-weight:600; font-size:.9rem; transition: transform .12s ease, border-color .12s ease, background .12s ease, color .12s ease; }
+		.btn:hover { border-color:#3A3A4C; color:${COLORS.text}; background: rgba(255,255,255,.03); transform: translateY(-1px); }
+		.btn:active { transform: translateY(0px) scale(.99); }
 		.btn-primary { background:${COLORS.accent}; border-color:${COLORS.accent}; color:white; }
 		.btn-primary:hover { background:${COLORS.accentHover}; border-color:${COLORS.accentHover}; }
 		.row { display:flex; gap:.75rem; flex-wrap:wrap; align-items:center; }
@@ -75,7 +76,8 @@ export function layout(opts: {
 		<div class="nav-left">
 			<a href="/dashboard" class="nav-brand">Sapphire<span>Auth</span></a>
 			${navLink("/dashboard", "Dashboard", "dashboard")}
-			${navLink("/vault", "Vault", "vault")}
+			${navLink("/vault", "Files", "vault")}
+			${navLink("/passwords", "Passwords", "vault")}
 			${session ? navLink("/profile", "Profile", "profile") : ""}
 			${adminLink}
 		</div>
