@@ -41,8 +41,9 @@ export function layout(opts: {
 		*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
 		:root { color-scheme: dark; }
 		body { font-family: 'Inter', system-ui, sans-serif; background: radial-gradient(1200px 600px at 20% -10%, rgba(108,99,255,.20), transparent 60%), radial-gradient(900px 500px at 80% 0%, rgba(108,99,255,.10), transparent 60%), ${COLORS.bg}; color: ${COLORS.text}; min-height: 100vh; }
-		nav { position:sticky; top:0; z-index:10; backdrop-filter: blur(10px); display:flex; justify-content:space-between; align-items:center; padding: 1rem 2rem; border-bottom: 1px solid ${COLORS.borderSoft}; background: rgba(19,19,26,.75); }
-		.nav-brand { font-size:1.25rem; font-weight:700; color:${COLORS.accent}; text-decoration:none; }
+		nav { position:sticky; top:0; z-index:10; backdrop-filter: blur(10px); display:flex; justify-content:space-between; align-items:center; padding: .85rem 1.25rem; border-bottom: 1px solid ${COLORS.borderSoft}; background: rgba(19,19,26,.75); }
+		@media (max-width: 560px){ nav { padding: .75rem .9rem; } }
+		.nav-brand { font-size:1.15rem; font-weight:800; color:${COLORS.accent}; text-decoration:none; letter-spacing:-.02em; }
 		.nav-brand span { color:${COLORS.text}; }
 		.nav-left { display:flex; align-items:center; gap:.75rem; }
 		.nav-right { display:flex; align-items:center; gap:.75rem; }
@@ -76,7 +77,8 @@ export function layout(opts: {
 	${variant === "marketing" ? "" : `
 	<nav>
 		<div class="nav-left">
-			<a href="/dashboard" class="nav-brand">Sapphire<span>Vault</span></a>
+			<a href="/" class="nav-brand">Sapphire<span>Vault</span></a>
+			<a class="nav-link" href="/">Home</a>
 		</div>
 		<div class="nav-right">
 			${session ? `<span class="badge">${session.email}</span><a class="nav-link" href="/logout">Log out</a>` : `<a class="nav-link" href="/dashboard">Log in</a>`}
