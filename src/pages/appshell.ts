@@ -44,6 +44,12 @@ export function appShell(session: Session, opts: { title: string; active: Tab; c
 				@media (max-width: 980px){ .appgrid { grid-template-columns: 1fr; } }
 
 				.sidebar { position: sticky; top: 84px; height: calc(100vh - 110px); border:1px solid #2A2A3C; border-radius: 1.25rem; background: rgba(26,26,36,.55); overflow:hidden; }
+				@media (max-width: 980px){
+					.sidebar { position: relative; top: 0; height: auto; }
+					.sbnav { grid-template-columns: 1fr 1fr; }
+					.slink { justify-content:center; }
+					.lbl { display:none; }
+				}
 				.sbhead { padding: 1.1rem 1.1rem .8rem; border-bottom:1px solid #1E1E2E; }
 				.brand { font-weight: 900; letter-spacing: -.02em; }
 				.brand small { display:block; color:#7A7A92; font-weight:600; margin-top:.25rem; }

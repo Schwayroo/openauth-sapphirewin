@@ -76,15 +76,10 @@ export function layout(opts: {
 	${variant === "marketing" ? "" : `
 	<nav>
 		<div class="nav-left">
-			<a href="/dashboard" class="nav-brand">Sapphire<span>Auth</span></a>
-			${navLink("/dashboard", "Dashboard", "dashboard")}
-			${navLink("/vault", "Files", "vault")}
-			${navLink("/passwords", "Passwords", "vault")}
-			${session ? navLink("/profile", "Profile", "profile") : ""}
-			${adminLink}
+			<a href="/dashboard" class="nav-brand">Sapphire<span>Vault</span></a>
 		</div>
 		<div class="nav-right">
-			${session ? `<span class="badge">${session.email} · ${session.role}</span><a class="nav-link" href="/logout">Log out</a>` : `<a class="nav-link" href="/dashboard">Log in</a>`}
+			${session ? `<span class="badge">${session.email}</span><a class="nav-link" href="/logout">Log out</a>` : `<a class="nav-link" href="/dashboard">Log in</a>`}
 		</div>
 	</nav>
 	`}
