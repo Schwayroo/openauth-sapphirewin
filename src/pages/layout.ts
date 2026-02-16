@@ -16,8 +16,9 @@ export function layout(opts: {
 	session: Session | null;
 	active?: "dashboard" | "vault" | "profile" | "admin";
 	content: string;
+	variant?: "app" | "marketing";
 }): Response {
-	const { title, session, active, content } = opts;
+	const { title, session, active, content, variant = "app" } = opts;
 
 	const navLink = (href: string, label: string, key?: string) => {
 		const isActive = key && active === key;
@@ -48,7 +49,7 @@ export function layout(opts: {
 		.nav-link { display:inline-flex; align-items:center; padding:.45rem .9rem; border-radius:.75rem; border:1px solid ${COLORS.border}; text-decoration:none; font-size:.875rem; color:${COLORS.muted}; transition: transform .12s ease, border-color .12s ease, background .12s ease, color .12s ease; }
 		.nav-link:hover { border-color:#3A3A4C; color:${COLORS.text}; background: rgba(255,255,255,.03); transform: translateY(-1px); }
 		.badge { padding:.2rem .55rem; border-radius:999px; font-size:.75rem; border:1px solid ${COLORS.border}; color:${COLORS.muted}; }
-		main { display:flex; justify-content:center; padding: 2.5rem 1.25rem; }
+		main { display:flex; justify-content:center; padding: ${variant === "marketing" ? "4rem 1.25rem" : "2.5rem 1.25rem"}; }
 		.container { width:100%; max-width: 1120px; }
 		.card { background: linear-gradient(180deg, rgba(26,26,36,.92), rgba(26,26,36,.72)); border:1px solid ${COLORS.border}; border-radius:1rem; padding:1.25rem; box-shadow: 0 12px 40px rgba(0,0,0,.35); animation: cardIn .25s ease-out; }
 		@keyframes cardIn { from { transform: translateY(6px); opacity: .0; } to { transform: translateY(0); opacity: 1; } }
@@ -72,6 +73,7 @@ export function layout(opts: {
 	</style>
 </head>
 <body>
+	${variant === "marketing" ? "" : `
 	<nav>
 		<div class="nav-left">
 			<a href="/dashboard" class="nav-brand">Sapphire<span>Auth</span></a>
@@ -85,6 +87,7 @@ export function layout(opts: {
 			${session ? `<span class="badge">${session.email} · ${session.role}</span><a class="nav-link" href="/logout">Log out</a>` : `<a class="nav-link" href="/dashboard">Log in</a>`}
 		</div>
 	</nav>
+	`}
 	<main>
 		<div class="container">${content}</div>
 	</main>

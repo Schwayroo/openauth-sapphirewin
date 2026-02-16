@@ -9,6 +9,7 @@ import type { Env } from "./db";
 import { getUserById, listUsers, setUserRole } from "./db";
 import { errorPage } from "./pages/error";
 import { dashboardPage } from "./pages/dashboard";
+import { homePage } from "./pages/home";
 import { profilePage } from "./pages/profile";
 import { getUserSettings, updateUserSettings } from "./settings";
 import { adminUsersPage } from "./pages/admin";
@@ -37,7 +38,11 @@ export default {
 		const canon = canonicalize(url, env);
 		if (canon) return canon;
 
-		if (url.pathname === "/") return Response.redirect(url.origin + "/dashboard", 302);
+		if (url.pathname === "/") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (session) return Response.redirect(url.origin + "/dashboard", 302);
+			return homePage();
+		}
 
 		// Vault (files)
 		if (url.pathname === "/vault") {
