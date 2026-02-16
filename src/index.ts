@@ -390,7 +390,7 @@ export default {
 		}
 
 		// Everything else — OpenAuth issuer
-		return issuer({
+		const auth = issuer({
 			storage: CloudflareStorage({ namespace: env.AUTH_STORAGE }),
 			subjects,
 			providers: {
@@ -469,6 +469,7 @@ export default {
 				});
 			},
 		});
+		return auth.fetch(request, env, ctx);
 	},
 };
 
