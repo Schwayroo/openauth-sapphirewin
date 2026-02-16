@@ -271,7 +271,7 @@ export default {
 				),
 			},
 			theme: {
-				title: "SapphireAuth",
+				title: "SapphireVault",
 				radius: "lg",
 				primary: { dark: "#6C63FF", light: "#4F46E5" },
 				background: { dark: "#0F0F13", light: "#F9FAFB" },
