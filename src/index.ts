@@ -17,6 +17,10 @@ import { adminUsersPage } from "./pages/admin";
 import { vaultListPage, vaultPreviewPage } from "./pages/vault";
 import { passwordsPage } from "./pages/passwords";
 import { photosPage } from "./pages/photos";
+import { sharedPage } from "./pages/shared";
+import { activityPage } from "./pages/activity";
+import { favoritesPage } from "./pages/favorites";
+import { trashPage } from "./pages/trash";
 import { getPasswordVault, upsertPasswordVault } from "./passwords";
 import { createVaultFile, deleteVaultFile, getVaultFile, listMediaFiles, listVaultFiles } from "./vault";
 
@@ -80,16 +84,13 @@ export default {
 				sizeBytes: file.size,
 			});
 
-			// Optional Telegram mirror (feature-flag + per-user)
+			// Telegram mirror — photos only (images, not videos), per-user opt-in
 			if ((env.TELEGRAM_MIRROR_ENABLED ?? "false") === "true") {
-				const kind = (file.type ?? "").toLowerCase();
-				const isMedia = kind.startsWith("image/") || kind.startsWith("video/");
-				if (isMedia) {
+				const isPhoto = (file.type ?? "").toLowerCase().startsWith("image/");
+				if (isPhoto) {
 					const settings = await getUserSettings(env, fresh.userId);
-					if (settings.telegram_mirror_enabled && settings.telegram_chat_id) {
-						if (settings.telegram_bot_token) {
-							ctx.waitUntil(mirrorToTelegram(settings.telegram_bot_token, settings.telegram_chat_id, file));
-						}
+					if (settings.telegram_mirror_enabled && settings.telegram_chat_id && settings.telegram_bot_token) {
+						ctx.waitUntil(mirrorPhotoToTelegram(settings.telegram_bot_token, settings.telegram_chat_id, file));
 					}
 				}
 			}
@@ -185,6 +186,34 @@ export default {
 			const fresh = await refreshSessionFromDb(env, session);
 			const media = await listMediaFiles(env, fresh.userId);
 			return photosPage(fresh, media);
+		}
+
+		if (url.pathname === "/shared") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			return sharedPage(fresh);
+		}
+
+		if (url.pathname === "/activity") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			return activityPage(fresh);
+		}
+
+		if (url.pathname === "/favorites") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			return favoritesPage(fresh);
+		}
+
+		if (url.pathname === "/trash") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			return trashPage(fresh);
 		}
 
 		// Password vault
@@ -410,17 +439,28 @@ export default {
 	},
 };
 
-async function mirrorToTelegram(botToken: string, chatId: string, file: File) {
+async function mirrorPhotoToTelegram(botToken: string, chatId: string, file: File) {
 	try {
 		const form = new FormData();
 		form.set("chat_id", chatId);
-		form.set("document", file, file.name);
-		await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
+		// sendPhoto for images — faster, displays inline in Telegram
+		form.set("photo", file, file.name);
+		const res = await fetch(`https://api.telegram.org/bot${botToken}/sendPhoto`, {
 			method: "POST",
 			body: form,
 		});
+		if (!res.ok) {
+			// Fallback to sendDocument if sendPhoto fails (e.g. file too large)
+			const form2 = new FormData();
+			form2.set("chat_id", chatId);
+			form2.set("document", file, file.name);
+			await fetch(`https://api.telegram.org/bot${botToken}/sendDocument`, {
+				method: "POST",
+				body: form2,
+			});
+		}
 	} catch (e) {
-		console.error("Telegram mirror failed", e);
+		console.error("Telegram photo mirror failed", e);
 	}
 }
 
