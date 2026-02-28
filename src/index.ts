@@ -17,12 +17,19 @@ import { adminUsersPage } from "./pages/admin";
 import { vaultListPage, vaultPreviewPage } from "./pages/vault";
 import { passwordsPage } from "./pages/passwords";
 import { photosPage } from "./pages/photos";
+import { telegramPage } from "./pages/telegram";
 import { sharedPage } from "./pages/shared";
 import { activityPage } from "./pages/activity";
 import { favoritesPage } from "./pages/favorites";
 import { trashPage } from "./pages/trash";
 import { getPasswordVault, upsertPasswordVault } from "./passwords";
-import { createVaultFile, deleteVaultFile, getVaultFile, listMediaFiles, listVaultFiles } from "./vault";
+import {
+	createVaultFile, deleteVaultFile, getVaultFile,
+	listMediaFiles, listVaultFiles, listImageFiles,
+	listMediaFilesInFolder, listPhotoFolders, getAllPhotoFolders,
+	getPhotoFolder, createPhotoFolder, deletePhotoFolder,
+	getFolderBreadcrumb, moveVaultFileToFolder,
+} from "./vault";
 
 import { makeSessionCookie, getSessionFromRequest, clearSessionCookie } from "./session";
 import { redirectToLogin, refreshSessionFromDb, requireRole } from "./authz";
@@ -184,8 +191,119 @@ export default {
 			const session = await getSessionFromRequest(request, COOKIE_SECRET);
 			if (!session) return redirectToLogin(url);
 			const fresh = await refreshSessionFromDb(env, session);
-			const media = await listMediaFiles(env, fresh.userId);
-			return photosPage(fresh, media);
+			const [files, folders, allFolders] = await Promise.all([
+				listMediaFilesInFolder(env, fresh.userId, null),
+				listPhotoFolders(env, fresh.userId, null),
+				getAllPhotoFolders(env, fresh.userId),
+			]);
+			return photosPage(fresh, { files, folders, currentFolder: null, breadcrumbs: [], allFolders });
+		}
+
+		// Create photo folder
+		if (url.pathname === "/photos/folders" && request.method === "POST") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			const form = await request.formData();
+			const name = String(form.get("name") ?? "").trim();
+			const parentId = String(form.get("parent_id") ?? "").trim() || null;
+			const redirect = String(form.get("redirect") ?? "/photos");
+			if (!name) return errorPage("Folder name required");
+			await createPhotoFolder(env, { ownerId: fresh.userId, name, parentId });
+			return Response.redirect(url.origin + redirect, 302);
+		}
+
+		// Move photo to folder
+		if (url.pathname === "/photos/move" && request.method === "POST") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			const form = await request.formData();
+			const fileId = String(form.get("file_id") ?? "").trim();
+			const folderId = String(form.get("folder_id") ?? "").trim() || null;
+			const redirect = String(form.get("redirect") ?? "/photos");
+			if (!fileId) return errorPage("Missing file_id");
+			await moveVaultFileToFolder(env, fileId, fresh.userId, folderId);
+			return Response.redirect(url.origin + redirect, 302);
+		}
+
+		// Photo folder view
+		const photoFolderMatch = url.pathname.match(/^\/photos\/folder\/([a-zA-Z0-9]+)$/);
+		if (photoFolderMatch) {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			const folderId = photoFolderMatch[1];
+			const [currentFolder, files, folders, allFolders, breadcrumbs] = await Promise.all([
+				getPhotoFolder(env, folderId, fresh.userId),
+				listMediaFilesInFolder(env, fresh.userId, folderId),
+				listPhotoFolders(env, fresh.userId, folderId),
+				getAllPhotoFolders(env, fresh.userId),
+				getFolderBreadcrumb(env, folderId, fresh.userId),
+			]);
+			if (!currentFolder) return errorPage("Folder not found");
+			return photosPage(fresh, { files, folders, currentFolder, breadcrumbs, allFolders });
+		}
+
+		// Delete photo folder
+		const photoFolderDeleteMatch = url.pathname.match(/^\/photos\/folder\/([a-zA-Z0-9]+)\/delete$/);
+		if (photoFolderDeleteMatch && request.method === "POST") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			const folderId = photoFolderDeleteMatch[1];
+			await deletePhotoFolder(env, folderId, fresh.userId);
+			return Response.redirect(url.origin + "/photos", 302);
+		}
+
+		// Telegram page
+		if (url.pathname === "/telegram") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return redirectToLogin(url);
+			const fresh = await refreshSessionFromDb(env, session);
+			const [images, settings] = await Promise.all([
+				listImageFiles(env, fresh.userId),
+				getUserSettings(env, fresh.userId),
+			]);
+			return telegramPage(fresh, {
+				images,
+				hasBotConfig: !!(settings.telegram_bot_token && settings.telegram_chat_id),
+				botToken: settings.telegram_bot_token ?? null,
+				chatId: settings.telegram_chat_id ?? null,
+				telegramEnabled: !!settings.telegram_mirror_enabled,
+			});
+		}
+
+		// Telegram send selected photos
+		if (url.pathname === "/telegram/send" && request.method === "POST") {
+			const session = await getSessionFromRequest(request, COOKIE_SECRET);
+			if (!session) return new Response(JSON.stringify({ error: "Not authenticated" }), { status: 401, headers: { "Content-Type": "application/json" } });
+			const fresh = await refreshSessionFromDb(env, session);
+			const settings = await getUserSettings(env, fresh.userId);
+			if (!settings.telegram_bot_token || !settings.telegram_chat_id) {
+				return new Response(JSON.stringify({ error: "Telegram not configured" }), { status: 400, headers: { "Content-Type": "application/json" } });
+			}
+			const body = await request.json<{ fileIds?: string[] }>();
+			const fileIds = Array.isArray(body?.fileIds) ? body.fileIds.slice(0, 20) : [];
+			if (!fileIds.length) return new Response(JSON.stringify({ error: "No files selected" }), { status: 400, headers: { "Content-Type": "application/json" } });
+
+			let sent = 0;
+			const errors: string[] = [];
+			for (const id of fileIds) {
+				const f = await getVaultFile(env, id, fresh.userId);
+				if (!f || !(f.mime_type ?? "").startsWith("image/")) continue;
+				const obj = await env.R2_VAULT.get(f.r2_key);
+				if (!obj) continue;
+				const blob = await obj.arrayBuffer();
+				const file = new File([blob], f.file_name, { type: f.mime_type ?? "image/jpeg" });
+				try {
+					await mirrorPhotoToTelegram(settings.telegram_bot_token, settings.telegram_chat_id, file);
+					sent++;
+				} catch (e) {
+					errors.push(f.file_name);
+				}
+			}
+			return new Response(JSON.stringify({ sent, errors }), { headers: { "Content-Type": "application/json" } });
 		}
 
 		if (url.pathname === "/shared") {
